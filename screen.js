@@ -17,7 +17,7 @@ let position=0,language=0,peer=null,touchStart=null;
 const two=n=>String(n).padStart(2,'0');
 const clip=(n,a,b)=>Math.min(b,Math.max(a,Math.round(n)));
 function read(s){return s[language];}
-function ui(k){return read(words[k]);}
+function ui(k){return pair(words[k]);}
 function jump(ch,part=0){
  const chapter=clip(ch,0,ARCHIVE.length-1);
  const j=clip(part,0,ARCHIVE[chapter].frames.length-1);
@@ -29,8 +29,9 @@ function post(type){
 }
 function move(where,lang=language,sync=true,remember=true){
  if(!Number.isFinite(where)||!Number.isFinite(lang))return;
+ const changed=position!==where;
  position=clip(where,0,slides.length-1);language=clip(lang,0,tags.length-1);
- updateHref(remember);render();if(sync)post('state');
+ updateHref(remember);render();if(changed)window.scrollTo(0,0);if(sync)post('state');
 }
 function updateHref(remember){
  const s=slides[position];const hash='scene='+(s.chapter+1)+'&frame='+(s.part+1)+'&lang='+tags[language];
@@ -38,22 +39,63 @@ function updateHref(remember){
  const method=remember?'pushState':'replaceState';
  try{history[method](null,'','#'+hash);}catch{if(remember)location.hash=hash;else location.replace('#'+hash);}
 }
+function mediaUrl(name){
+ return 'media/'+(name.includes('.')?name:name+'.jpg');
+}
+function pair(values, separator=' / '){
+ const local=read(values);
+ return language!==1&&local!==values[1]?local+separator+values[1]:local;
+}
+function pairedLines(element, values){
+ element.replaceChildren();
+ if(!values)return;
+ const indices=language!==1&&read(values)!==values[1]?[language,1]:[language];
+ for(const index of indices){
+  const line=document.createElement('span');
+  line.lang=tags[index];
+  line.textContent=values[index];
+  element.append(line);
+ }
+}
 function setMedia(s){
  const {img,hero,text}=s.frame;
  ids.image.hidden=!img||img==='TANK';
  if(!ids.image.hidden){
-  const url='media/'+img+'.jpg';if(ids.image.getAttribute('src')!==url)ids.image.src=url;
-  ids.image.alt=read(text);
+  const url=mediaUrl(img);
+  if(ids.image.getAttribute('src')!==url)ids.image.src=url;
+  ids.image.alt=pair(text);
  }else ids.image.removeAttribute('src');
- ids.tank.hidden=img!=='TANK';ids.tank.textContent=TANK;ids.typeArt.hidden=!hero;ids.typeArt.textContent=hero?read(hero):'';
+ ids.tank.hidden=img!=='TANK';
+ ids.tank.textContent=TANK;
+ ids.typeArt.hidden=!hero;
+ pairedLines(ids.typeArt,hero);
  ids.visual.classList.toggle('symbol',img==='TANK');
+ ids.visual.classList.toggle('forum',position===1);
 }
 function render(){
- const s=slides[position],n=slides[position+1];document.documentElement.lang=tags[language];document.body.classList.toggle('first',position===0);document.body.classList.toggle('action',s.chapter===17);
- ids.language.value=language;ids.language.setAttribute('aria-label',ui('language'));ids.menuName.textContent=ids.tocTitle.textContent=ui('menu');ids.close.setAttribute('aria-label',ui('close'));ids.fsName.textContent=ui(document.fullscreenElement?'exit':'full');ids.fullscreen.setAttribute('aria-label',ids.fsName.textContent);
- ids.number.textContent=ui('scene')+' '+two(s.chapter+1)+' / '+two(ARCHIVE.length);const date=s.frame.date??s.scene.date;ids.date.textContent=Array.isArray(date)?read(date):date;ids.heading.textContent=read(s.scene.title);
- ids.caption.textContent=s.frame.img==='TANK'?'':read(s.frame.text);
- const source=s.frame.source??s.scene.source;ids.source.hidden=!source||s.frame.img==='TANK';ids.source.href=source||'#';ids.source.textContent=ui('source');
+ const s=slides[position],n=slides[position+1];
+ const title=s.scene.title,caption=s.frame.img==='TANK'?null:s.frame.text;
+ document.documentElement.lang=tags[language];
+ document.body.classList.toggle('first',position===0);
+ document.body.classList.toggle('action',s.chapter===17);
+ document.body.classList.toggle('presenter',presenter);
+ ids.language.value=language;
+ ids.language.setAttribute('aria-label',ui('language'));
+ ids.menuName.textContent=ids.tocTitle.textContent=ui('menu');
+ ids.menu.setAttribute('aria-label',ui('menu'));
+ ids.close.setAttribute('aria-label',ui('close'));
+ ids.fsName.textContent=ui(document.fullscreenElement?'exit':'full');ids.fullscreen.setAttribute('aria-label',ids.fsName.textContent);
+ ids.number.textContent=ui('scene')+' '+two(s.chapter+1)+' / '+two(ARCHIVE.length);
+ const date=s.frame.date??s.scene.date;
+ ids.date.textContent=Array.isArray(date)?pair(date,' · '):date;
+ ids.localCopy.lang=tags[language];
+ ids.heading.textContent=read(title);
+ ids.caption.textContent=caption?read(caption):'';
+ ids.englishCopy.hidden=language===1;
+ ids.englishHeading.textContent=title[1];
+ ids.englishCaption.textContent=caption?caption[1]:'';
+ const source=s.frame.source??s.scene.source;
+ ids.source.hidden=!source||s.frame.img==='TANK';ids.source.href=source||'#';ids.source.textContent=ui('source');
  ids.prev.disabled=position===0;ids.next.disabled=!n;ids.prev.setAttribute('aria-label',ui('prev'));ids.next.setAttribute('aria-label',ui('next'));
  ids.pageCount.textContent=two(position+1)+' / '+two(slides.length);
  ids.track.firstElementChild.style.width=(100*(position+1)/slides.length)+'%';
@@ -63,15 +105,27 @@ function render(){
  ids.referenceClose.setAttribute('aria-label',ui('close'));
  setMedia(s);ids.preview.hidden=!presenter;
  if(presenter){
-  ids.nextLabel.textContent=n?ui('next')+' · '+two(position+2)+' / '+two(slides.length):ui('end');ids.nextHead.textContent=n?read(n.scene.title):'';ids.nextCap.textContent=n?read(n.frame.text):'';
-  const art=n?.frame.img==='TANK'?TANK:n?.frame.hero?read(n.frame.hero):'';
-  ids.nextArt.hidden=!art;ids.nextArt.textContent=art;
-  ids.nextArt.classList.toggle('symbol',n?.frame.img==='TANK');
-  ids.nextThumb.hidden=!(n?.frame.img&&n.frame.img!=='TANK');if(!ids.nextThumb.hidden)ids.nextThumb.src='media/'+n.frame.img+'.jpg';
+  ids.nextLabel.textContent=n?ui('next')+' · '+two(position+2)+' / '+two(slides.length):ui('end');
+  pairedLines(ids.nextHead,n?.scene.title);
+  pairedLines(ids.nextCap,n?.frame.text);
+  const tank=n?.frame.img==='TANK';
+  ids.nextArt.hidden=!tank&&!n?.frame.hero;
+  if(tank)ids.nextArt.textContent=TANK;
+  else pairedLines(ids.nextArt,n?.frame.hero);
+  ids.nextArt.classList.toggle('symbol',tank);
+  ids.nextThumb.hidden=!n?.frame.img||tank;
+  if(!ids.nextThumb.hidden)ids.nextThumb.src=mediaUrl(n.frame.img);
  }
- ids.list.replaceChildren(...ARCHIVE.map((sc,i)=>{const li=document.createElement('li'),b=document.createElement('button'),num=document.createElement('small');num.textContent=two(i+1);b.append(num,document.createTextNode(read(sc.title)));b.setAttribute('aria-current',String(i===s.chapter));b.onclick=()=>{ids.contents.close();move(jump(i));ids.stage.focus({preventScroll:true});};li.append(b);return li;}));
- ids.status.textContent=ids.number.textContent+' · '+ids.heading.textContent;document.title=read(s.scene.title)+' · ALKALI LIVE';
- if(n?.frame.img&&n.frame.img!=='TANK'){const pre=new Image();pre.src='media/'+n.frame.img+'.jpg';}
+ ids.list.replaceChildren(...ARCHIVE.map((sc,i)=>{
+  const li=document.createElement('li'),button=document.createElement('button'),num=document.createElement('small'),label=document.createElement('span');
+  num.textContent=two(i+1);pairedLines(label,sc.title);button.append(num,label);
+  button.setAttribute('aria-current',String(i===s.chapter));
+  button.onclick=()=>{ids.contents.close();move(jump(i));ids.stage.focus({preventScroll:true});};
+  li.append(button);return li;
+ }));
+ ids.status.textContent=ids.number.textContent+' · '+pair(title);
+ document.title=pair(title)+' · ALKALI LIVE';
+ if(n?.frame.img&&n.frame.img!=='TANK'){const pre=new Image();pre.src=mediaUrl(n.frame.img);}
 }
 function toggleFull(){if(document.fullscreenElement){document.exitFullscreen().catch(()=>{});}else if(document.documentElement.requestFullscreen){document.documentElement.requestFullscreen().catch(()=>{});} }
 function openConsole(){
@@ -87,7 +141,7 @@ function openReferences(){
   seen.add(href);
   const item=document.createElement('li'),link=document.createElement('a');
   link.href=href;link.target='_blank';link.rel='noopener';
-  link.textContent=two(slide.chapter+1)+' · '+(slide.frame.source?read(slide.frame.text):read(slide.scene.title))+' ↗';
+  link.textContent=two(slide.chapter+1)+' · '+(slide.frame.source?pair(slide.frame.text):pair(slide.scene.title))+' ↗';
   item.append(link);items.push(item);
  }
  ids.referenceList.replaceChildren(...items);ids.referenceDialog.showModal();

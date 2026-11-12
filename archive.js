@@ -11,7 +11,7 @@ const ARCHIVE = [
   "source": "https://mp.weixin.qq.com/s/-UDRYB_lgb_ox9_xCbY4qg",
   "frames": [
    {
-    "img": "door",
+    "img": "alkali-mark.png",
     "text": [
      "最高，日本博士后。先请各位看看这块招牌。",
      "Highest, the Japanese postdoc. First, take a look at our sign.",
